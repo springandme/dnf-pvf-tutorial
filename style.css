@@ -1,0 +1,124 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    background-color: #f0f0f0;
+    color: #333;
+    height: 100%;
+}
+
+#app {
+    display: flex;
+    height: 100vh;
+}
+
+#sidebar {
+    width: 300px;
+    background-color: #fff;
+    border-right: 1px solid #ddd;
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+#sidebar h2 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+#content-container {
+    flex-grow: 1;
+    padding: 40px;
+    overflow-y: auto;
+    background-color: #fff;
+}
+
+#file-tree ul {
+    list-style-type: none;
+    padding-left: 20px;
+}
+
+#file-tree li {
+    margin: 5px 0;
+}
+
+#file-tree .folder {
+    cursor: pointer;
+    position: relative;
+}
+
+#file-tree .folder-content {
+    padding: 4px 0;
+    font-weight: bold;
+}
+
+#file-tree .folder-content::before {
+    content: '▶ ';
+    display: inline-block;
+    margin-right: 6px;
+    transition: transform 0.2s ease-in-out;
+}
+
+#file-tree .folder.expanded > .folder-content::before {
+    transform: rotate(90deg);
+}
+
+#file-tree .folder.expanded > ul {
+    max-height: 1000px; /* Or a sufficiently large value */
+    transition: max-height 0.5s ease-in-out;
+}
+
+#file-tree .folder > ul {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+#file-tree .file {
+    display: block;
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 4px 0 4px 20px; /* Indent files */
+    border-radius: 4px;
+}
+
+#file-tree .file:hover {
+    background-color: #e9f5ff;
+}
+
+#file-tree .file.active {
+    background-color: #d0eaff;
+    font-weight: bold;
+}
+
+#file-tree .file::before {
+    content: '📄 ';
+    margin-right: 5px;
+}
+
+h1, h2, h3, p, pre, code {
+    margin: 1em 0;
+}
+
+h1 {
+    font-size: 2em;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.5em;
+}
+
+pre {
+    background-color: #2d2d2d;
+    color: #f1f1f1;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+code {
+    font-family: 'Courier New', Courier, monospace;
+}

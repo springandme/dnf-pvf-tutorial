@@ -1,0 +1,60 @@
+# 依赖目录
+node_modules/
+
+# 日志文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 环境变量文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 构建输出目录
+dist/
+build/
+
+# 运行时数据
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# 测试覆盖率
+coverage/
+*.lcov
+.nyc_output
+
+# 缓存目录
+.cache
+.parcel-cache
+.npm
+.eslintcache
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 临时文件
+tmp/
+temp/
+
+# 其他日志
+logs
+*.log
+
+# Docker 相关
+.dockerignore
+
+# TypeScript 缓存
+*.tsbuildinfo

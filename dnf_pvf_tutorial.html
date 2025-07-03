@@ -1,0 +1,173 @@
+<![CDATA[<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNF PVF 教程</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+      <div id="sidebar">
+        <h2>课程目录</h2>
+        <div id="file-tree"></div>
+      </div>
+      <div id="content-container">
+        <h1>请在左侧选择一个文件查看</h1>
+      </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileTreeContainer = document.getElementById('file-tree');
+            const contentContainer = document.getElementById('content-container');
+
+            const expandedFolders = new Set(JSON.parse(localStorage.getItem('expandedFolders')) || []);
+
+            function saveExpandedState() {
+                localStorage.setItem('expandedFolders', JSON.stringify(Array.from(expandedFolders)));
+            }
+
+            // 1. 获取文件列表并构建文件树（带缓存）
+            function getFiles() {
+                const cachedFiles = localStorage.getItem('fileList');
+                if (cachedFiles) {
+                    try {
+                        console.log('从缓存加载文件列表。');
+                        const files = JSON.parse(cachedFiles);
+                        const fileTree = buildTree(files);
+                        renderTree(fileTree, fileTreeContainer);
+                        return;
+                    } catch (e) {
+                        console.error('解析缓存失败，重新获取', e);
+                        localStorage.removeItem('fileList');
+                    }
+                }
+
+                console.log('从 API 获取文件列表。');
+                fetch('/api/files')
+                    .then(response => response.json())
+                    .then(files => {
+                        if (Array.isArray(files)) {
+                            localStorage.setItem('fileList', JSON.stringify(files));
+                            const fileTree = buildTree(files);
+                            renderTree(fileTree, fileTreeContainer);
+                        } else {
+                            throw new Error("API did not return a valid array.");
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取文件列表失败:', error);
+                        fileTreeContainer.innerHTML = '<p>无法加载课程目录。</p>';
+                    });
+            }
+
+            getFiles();
+
+            // 将扁平路径列表转换为层级树结构
+            function buildTree(paths) {
+                const tree = {};
+                paths.forEach(path => {
+                    const pathString = (typeof path === 'object' && path !== null) ? path.path : path;
+                    if (typeof pathString !== 'string') return;
+
+                    const parts = pathString.replace(/\\/g, '/').split('/');
+                    let current = tree;
+                    let currentPath = '';
+                    parts.forEach((part, index) => {
+                        currentPath += (currentPath ? '/' : '') + part;
+                        if (!current[part]) {
+                            current[part] = { __path: currentPath };
+                        }
+                        if (index === parts.length - 1) {
+                            current[part].__isFile = true;
+                        }
+                        current = current[part];
+                    });
+                });
+                return tree;
+            }
+
+            // 递归渲染文件树
+            function renderTree(node, container) {
+                const isRoot = container.id === 'file-tree';
+                if (isRoot) {
+                    container.innerHTML = '';
+                }
+
+                const ul = document.createElement('ul');
+
+                // 按名称升序排序
+                const sortedKeys = Object.keys(node)
+                    .filter(key => !key.startsWith('__'))
+                    .sort((a, b) => a.localeCompare(b, 'zh-CN', { sensitivity: 'base' }));
+
+                for (const key of sortedKeys) {
+                    const li = document.createElement('li');
+                    const item = node[key];
+                    const itemPath = item.__path;
+
+                    if (item.__isFile) {
+                        const a = document.createElement('a');
+                        a.textContent = key.replace(/\.json$/, ''); // 移除 .json 后缀
+                        a.href = '#';
+                        a.classList.add('file');
+                        a.dataset.path = itemPath;
+                        a.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            document.querySelectorAll('#file-tree .file.active').forEach(el => el.classList.remove('active'));
+                            a.classList.add('active');
+                            loadFileContent(itemPath);
+                        });
+                        li.appendChild(a);
+                    } else {
+                        const folderContent = document.createElement('div');
+                        folderContent.classList.add('folder-content');
+                        folderContent.textContent = key;
+                        li.appendChild(folderContent);
+                        li.classList.add('folder');
+
+                        if (expandedFolders.has(itemPath)) {
+                            li.classList.add('expanded');
+                        }
+
+                        li.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (e.target === li || e.target === folderContent) {
+                                const isExpanded = li.classList.toggle('expanded');
+                                if (isExpanded) {
+                                    expandedFolders.add(itemPath);
+                                } else {
+                                    expandedFolders.delete(itemPath);
+                                }
+                                saveExpandedState();
+                            }
+                        });
+                        renderTree(item, li);
+                    }
+                    ul.appendChild(li);
+                }
+                container.appendChild(ul);
+            }
+
+            // 2. 加载并显示文件内容
+            function loadFileContent(path) {
+                fetch(`/api/content?path=${encodeURIComponent(path)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.content) {
+                            contentContainer.innerHTML = data.content;
+                        } else {
+                            contentContainer.innerHTML = '<h1>无法加载内容</h1>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取文件内容失败:', error);
+                        contentContainer.innerHTML = '<h1>加载内容时出错</h1>';
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
+]]>
