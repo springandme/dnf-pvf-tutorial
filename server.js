@@ -9,6 +9,11 @@ const port = 3000;
 // Serve static files from the root directory
 app.use(express.static(path.join(__dirname)));
 
+// Root path redirect to main tutorial page
+app.get('/', (req, res) => {
+  res.redirect('/dnf_pvf_tutorial.html');
+});
+
 // API endpoint to get the list of .json files
 app.get('/api/files', async (req, res) => {
   try {

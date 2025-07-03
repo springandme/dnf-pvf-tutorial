@@ -168,7 +168,10 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=0.0.1,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.title=DNF PVF Tutorial
             org.opencontainers.image.description=DNF PVF 教程阅读器 - Web 应用

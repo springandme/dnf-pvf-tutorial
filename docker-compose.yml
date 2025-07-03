@@ -1,7 +1,68 @@
 version: '3.8'
+
 services:
-  pvf-tutorial-web:
-    build: .
+  dnf-pvf-tutorial:
+    # 使用本地构建的镜像
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+
+    # 或者使用预构建的镜像（取消注释下面一行，注释掉上面的 build 部分）
+    # image: ghcr.io/springandme/dnf-pvf-tutorial:latest
+
+    container_name: dnf-pvf-tutorial
+
+    # 端口映射：宿主机端口:容器端口
     ports:
-      - "8080:80"
-    restart: always
+      - "7210:3000"
+
+    # 环境变量
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+
+    # 数据卷挂载
+    volumes:
+      # 挂载课程数据目录，支持热更新
+      - ./pvfCourse:/app/pvfCourse:ro
+      # 可选：挂载日志目录
+      - ./logs:/app/logs
+
+    # 重启策略
+    restart: unless-stopped
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/files"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+    # 网络配置
+    networks:
+      - dnf-tutorial-network
+
+# 自定义网络
+networks:
+  dnf-tutorial-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# 数据卷定义（可选，用于持久化数据）
+volumes:
+  tutorial-logs:
+    driver: local
