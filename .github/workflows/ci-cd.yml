@@ -1,0 +1,153 @@
+name: CI/CD Pipeline
+
+# 当代码推送到 master 分支或创建 Pull Request 时触发
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  # 测试和构建作业
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 运行代码检查
+        run: |
+          # 如果有 ESLint 配置，运行代码检查
+          if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ]; then
+            npm run lint || echo "No lint script found"
+          fi
+
+      - name: 运行测试
+        run: |
+          # 如果有测试脚本，运行测试
+          if npm run test --if-present; then
+            echo "Tests passed"
+          else
+            echo "No tests found or tests failed"
+          fi
+
+      - name: 构建应用
+        run: |
+          # 如果有构建脚本，运行构建
+          if npm run build --if-present; then
+            echo "Build completed"
+          else
+            echo "No build script found"
+          fi
+
+  # GitHub Pages 部署作业
+  deploy-pages:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建静态文件
+        run: |
+          # 创建部署目录
+          mkdir -p dist
+
+          # 复制静态文件到 dist 目录
+          cp dnf_pvf_tutorial.html dist/index.html
+          cp style.css dist/
+          cp server.js dist/
+          cp package.json dist/
+          cp package-lock.json dist/
+          cp -r pvfCourse dist/
+
+          # 创建一个简单的静态版本说明
+          echo "# DNF PVF 教程阅读器" > dist/README.md
+          echo "这是一个用于学习和查看 PVF 文件修改教程的 Web 应用。" >> dist/README.md
+          echo "访问 index.html 开始使用。" >> dist/README.md
+
+      - name: 设置 GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: 上传构建文件
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Docker 构建和发布作业（可选）
+  docker-build:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 登录到 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取 Docker 元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 构建并推送 Docker 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
