@@ -88,18 +88,32 @@ jobs:
           # 创建部署目录
           mkdir -p dist
 
+          # 生成静态文件列表（用于 GitHub Pages）
+          node scripts/generate-file-list.js
+
           # 复制静态文件到 dist 目录
           cp dnf_pvf_tutorial.html dist/index.html
           cp style.css dist/
-          cp server.js dist/
-          cp package.json dist/
-          cp package-lock.json dist/
           cp -r pvfCourse dist/
+
+          # 验证生成的文件列表
+          if [ -f "dist/api/files.json" ]; then
+            echo "✅ 文件列表生成成功"
+            echo "文件数量: $(cat dist/api/files.json | jq length)"
+          else
+            echo "❌ 文件列表生成失败"
+            exit 1
+          fi
 
           # 创建一个简单的静态版本说明
           echo "# DNF PVF 教程阅读器" > dist/README.md
           echo "这是一个用于学习和查看 PVF 文件修改教程的 Web 应用。" >> dist/README.md
           echo "访问 index.html 开始使用。" >> dist/README.md
+          echo "" >> dist/README.md
+          echo "## 部署信息" >> dist/README.md
+          echo "- 构建时间: $(date)" >> dist/README.md
+          echo "- 提交哈希: ${{ github.sha }}" >> dist/README.md
+          echo "- 文件数量: $(cat dist/api/files.json | jq length)" >> dist/README.md
 
       - name: 设置 GitHub Pages
         uses: actions/configure-pages@v4

@@ -4,7 +4,9 @@
   "description": "A server to read data from the pvfCourse directory.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "node scripts/generate-file-list.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",

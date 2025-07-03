@@ -43,21 +43,42 @@
                     }
                 }
 
-                console.log('从 API 获取文件列表。');
-                fetch('/api/files')
-                    .then(response => response.json())
+                // 检测运行环境：GitHub Pages 使用静态文件，本地开发使用动态 API
+                const isGitHubPages = window.location.hostname.includes('github.io');
+                const apiUrl = isGitHubPages ? './api/files.json' : '/api/files';
+
+                console.log(`从 ${isGitHubPages ? '静态文件' : 'API'} 获取文件列表: ${apiUrl}`);
+
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
                     .then(files => {
                         if (Array.isArray(files)) {
                             localStorage.setItem('fileList', JSON.stringify(files));
                             const fileTree = buildTree(files);
                             renderTree(fileTree, fileTreeContainer);
+                            console.log(`成功加载 ${files.length} 个文件`);
                         } else {
-                            throw new Error("API did not return a valid array.");
+                            throw new Error("返回的数据不是有效的数组格式");
                         }
                     })
                     .catch(error => {
                         console.error('获取文件列表失败:', error);
-                        fileTreeContainer.innerHTML = '<p>无法加载课程目录。</p>';
+                        fileTreeContainer.innerHTML = `
+                            <div style="padding: 20px; text-align: center; color: #666;">
+                                <p>⚠️ 无法加载课程目录</p>
+                                <p style="font-size: 12px; margin-top: 10px;">
+                                    错误信息: ${error.message}
+                                </p>
+                                <p style="font-size: 12px; color: #999;">
+                                    环境: ${isGitHubPages ? 'GitHub Pages' : '本地开发'}
+                                </p>
+                            </div>
+                        `;
                     });
             }
 
