@@ -141,6 +141,18 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 验证构建文件
+        run: npm run verify:build
+
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -171,7 +183,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=0.0.1,enable={{is_default_branch}}
+            type=raw,value=0.1.0,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.title=DNF PVF Tutorial
             org.opencontainers.image.description=DNF PVF 教程阅读器 - Web 应用

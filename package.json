@@ -8,6 +8,7 @@
     "build": "node scripts/generate-file-list.js",
     "dev": "node server.js",
     "validate:docker": "node validate-docker-config.js",
+    "verify:build": "node scripts/verify-docker-build.js",
     "docker:simple": "docker-compose -f docker-compose.simple.yml up -d",
     "docker:full": "docker-compose up -d",
     "docker:stop": "docker-compose down && docker-compose -f docker-compose.simple.yml down"

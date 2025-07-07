@@ -19,6 +19,9 @@ COPY . .
 # 同样使用 node:18-alpine 作为基础镜像
 FROM node:18-alpine AS production
 
+# 安装 curl 用于健康检查
+RUN apk add --no-cache curl
+
 # 设置工作目录
 WORKDIR /app
 
@@ -38,6 +41,10 @@ ENV NODE_ENV=production
 
 # 暴露应用运行的端口
 EXPOSE 3000
+
+# 添加健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/ || exit 1
 
 # 定义容器启动时执行的命令
 CMD ["node", "server.js"]
