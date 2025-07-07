@@ -1,41 +1,379 @@
-<![CDATA[<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DNF PVF 教程</title>
     <link rel="stylesheet" href="style.css">
+
+    <!-- 预加载设置，避免页面闪烁 -->
+    <script>
+        // 在页面渲染前应用保存的设置
+        (function() {
+            // 应用主题设置
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark-theme');
+            }
+
+            // 应用字体大小设置
+            const savedFontSize = localStorage.getItem('fontSize');
+            if (savedFontSize) {
+                document.documentElement.style.fontSize = savedFontSize + 'px';
+            }
+
+            // 添加页面准备状态类，避免内容闪烁
+            document.documentElement.classList.add('page-loading');
+        })();
+    </script>
 </head>
 <body>
     <div id="app">
       <div id="sidebar">
-        <h2>课程目录</h2>
-        <div id="file-tree"></div>
+        <div class="sidebar-header">
+          <h2>课程目录</h2>
+          <div class="search-container">
+            <div class="search-box">
+              <input type="text" id="search-input" placeholder="搜索教程... (Ctrl+F)" autocomplete="off">
+              <button id="search-clear" class="search-clear" title="清除搜索">×</button>
+            </div>
+            <div id="search-stats" class="search-stats"></div>
+          </div>
+        </div>
+        <div id="file-tree-container">
+          <div id="file-tree"></div>
+          <div id="search-results" class="search-results" style="display: none;"></div>
+        </div>
+        <div id="loading-indicator" class="loading-indicator" style="display: none;">
+          <div class="spinner"></div>
+          <span>加载中...</span>
+        </div>
       </div>
       <div id="content-container">
-        <h1>请在左侧选择一个文件查看</h1>
+        <div class="content-header">
+          <div class="breadcrumb" id="breadcrumb"></div>
+          <div class="content-actions">
+            <button id="toggle-theme" class="action-btn" title="切换主题">🌙</button>
+            <button id="font-size-decrease" class="action-btn" title="减小字体">A-</button>
+            <button id="font-size-increase" class="action-btn" title="增大字体">A+</button>
+          </div>
+        </div>
+        <div id="content-body">
+          <div class="welcome-message">
+            <h1>🎮 DNF PVF 教程阅读器</h1>
+            <p>请在左侧选择一个教程文件开始学习，或使用搜索功能快速查找内容。</p>
+            <div class="quick-tips">
+              <h3>💡 使用技巧：</h3>
+              <ul>
+                <li><kbd>Ctrl</kbd> + <kbd>F</kbd> - 打开搜索</li>
+                <li><kbd>↑</kbd> <kbd>↓</kbd> - 导航搜索结果</li>
+                <li><kbd>Enter</kbd> - 打开选中文件</li>
+                <li><kbd>Esc</kbd> - 清除搜索</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // DOM 元素引用
             const fileTreeContainer = document.getElementById('file-tree');
-            const contentContainer = document.getElementById('content-container');
+            const contentContainer = document.getElementById('content-body');
+            const searchInput = document.getElementById('search-input');
+            const searchClear = document.getElementById('search-clear');
+            const searchResults = document.getElementById('search-results');
+            const searchStats = document.getElementById('search-stats');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const breadcrumb = document.getElementById('breadcrumb');
 
-            const expandedFolders = new Set(JSON.parse(localStorage.getItem('expandedFolders')) || []);
+            // 应用状态
+            let allFiles = [];
+            let filteredFiles = [];
+            let currentSearchTerm = '';
+            let selectedIndex = -1;
+            let isSearchMode = false;
 
+            // 初始化展开文件夹状态 - 默认所有文件夹都是折叠的
+            // 通过 CSS 确保默认折叠，JavaScript 只管理用户的展开偏好
+            let expandedFolders = new Set();
+
+            // 尝试从 localStorage 读取用户的展开偏好（如果可用）
+            // 在隐私模式下，localStorage 可能不可用，这时保持默认折叠状态
+            try {
+                const savedExpanded = localStorage.getItem('expandedFolders');
+                if (savedExpanded) {
+                    expandedFolders = new Set(JSON.parse(savedExpanded));
+                }
+            } catch (e) {
+                // 隐私模式或其他情况下 localStorage 不可用，保持默认空状态
+                console.log('localStorage 不可用，使用默认折叠状态');
+                expandedFolders = new Set();
+            }
+            const recentFiles = JSON.parse(localStorage.getItem('recentFiles')) || [];
+
+            // 工具函数
             function saveExpandedState() {
-                localStorage.setItem('expandedFolders', JSON.stringify(Array.from(expandedFolders)));
+                try {
+                    localStorage.setItem('expandedFolders', JSON.stringify(Array.from(expandedFolders)));
+                } catch (e) {
+                    // 隐私模式下 localStorage 可能不可用，静默忽略
+                    console.log('无法保存展开状态（可能是隐私模式）');
+                }
+            }
+
+            function saveRecentFiles() {
+                localStorage.setItem('recentFiles', JSON.stringify(recentFiles.slice(0, 10)));
+            }
+
+            function addToRecentFiles(filePath) {
+                const index = recentFiles.indexOf(filePath);
+                if (index > -1) {
+                    recentFiles.splice(index, 1);
+                }
+                recentFiles.unshift(filePath);
+                saveRecentFiles();
+            }
+
+            function showLoading() {
+                loadingIndicator.style.display = 'flex';
+            }
+
+            function hideLoading() {
+                loadingIndicator.style.display = 'none';
+            }
+
+            function updateBreadcrumb(filePath) {
+                if (!filePath) {
+                    breadcrumb.innerHTML = '';
+                    return;
+                }
+
+                const parts = filePath.split(/[\/\\]/).filter(part => part);
+                const breadcrumbHtml = parts.map((part, index) => {
+                    const isLast = index === parts.length - 1;
+                    const displayName = part.replace(/\.json$/, '');
+                    const partialPath = parts.slice(0, index + 1).join('/');
+
+                    if (isLast) {
+                        return `<span class="breadcrumb-current">${displayName}</span>`;
+                    } else {
+                        return `<span class="breadcrumb-item" data-path="${partialPath}" title="点击跳转到 ${displayName}">${displayName}</span>`;
+                    }
+                }).join('<span class="breadcrumb-separator">></span>');
+
+                breadcrumb.innerHTML = breadcrumbHtml;
+
+                // 绑定面包屑点击事件
+                breadcrumb.querySelectorAll('.breadcrumb-item[data-path]').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const targetPath = item.dataset.path;
+                        navigateToDirectory(targetPath);
+                    });
+                });
+            }
+
+            // 面包屑导航功能
+            function navigateToDirectory(targetPath) {
+                console.log('导航到目录:', targetPath);
+
+                // 清除搜索状态
+                if (isSearchMode) {
+                    clearSearch();
+                }
+
+                // 展开到目标路径的所有父目录
+                expandPathToDirectory(targetPath);
+
+                // 高亮显示目标目录
+                highlightDirectoryInTree(targetPath);
+
+                // 滚动到目标目录
+                scrollToDirectoryInTree(targetPath);
+            }
+
+            function expandPathToDirectory(targetPath) {
+                const pathParts = targetPath.split('/');
+                let currentPath = '';
+
+                // 逐级展开路径
+                pathParts.forEach(part => {
+                    currentPath += (currentPath ? '/' : '') + part;
+                    expandedFolders.add(currentPath);
+                });
+
+                saveExpandedState();
+
+                // 重新渲染文件树以显示展开状态
+                if (allFiles.length > 0) {
+                    const fileTree = buildTree(allFiles);
+                    renderTree(fileTree, fileTreeContainer);
+                }
+            }
+
+            function highlightDirectoryInTree(targetPath) {
+                // 移除之前的高亮
+                document.querySelectorAll('#file-tree .folder-content.highlighted').forEach(el => {
+                    el.classList.remove('highlighted');
+                });
+
+                // 查找并高亮目标目录
+                const folderElements = document.querySelectorAll('#file-tree .folder-content');
+                folderElements.forEach(element => {
+                    const folderLi = element.closest('li');
+                    if (folderLi) {
+                        const folderPath = getFolderPathFromElement(folderLi);
+                        if (folderPath === targetPath) {
+                            element.classList.add('highlighted');
+                            // 添加临时高亮效果
+                            setTimeout(() => {
+                                element.classList.remove('highlighted');
+                            }, 3000);
+                        }
+                    }
+                });
+            }
+
+            function scrollToDirectoryInTree(targetPath) {
+                const folderElements = document.querySelectorAll('#file-tree .folder-content');
+                folderElements.forEach(element => {
+                    const folderLi = element.closest('li');
+                    if (folderLi) {
+                        const folderPath = getFolderPathFromElement(folderLi);
+                        if (folderPath === targetPath) {
+                            element.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center'
+                            });
+                        }
+                    }
+                });
+            }
+
+            function getFolderPathFromElement(folderElement) {
+                // 使用 data-folder-path 属性直接获取路径
+                return folderElement.dataset.folderPath || '';
+            }
+
+            // 搜索功能
+            function normalizeText(text) {
+                return text.toLowerCase().replace(/[^\w\s\u4e00-\u9fff]/g, '');
+            }
+
+            function highlightText(text, searchTerm) {
+                if (!searchTerm) return text;
+                const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                return text.replace(regex, '<mark>$1</mark>');
+            }
+
+            function searchFiles(searchTerm) {
+                if (!searchTerm.trim()) {
+                    return allFiles;
+                }
+
+                const normalizedTerm = normalizeText(searchTerm);
+                return allFiles.filter(file => {
+                    const fileName = normalizeText(file.name || file.path);
+                    const filePath = normalizeText(file.path);
+                    return fileName.includes(normalizedTerm) || filePath.includes(normalizedTerm);
+                }).sort((a, b) => {
+                    // 优先显示文件名匹配的结果
+                    const aNameMatch = normalizeText(a.name || a.path).includes(normalizedTerm);
+                    const bNameMatch = normalizeText(b.name || b.path).includes(normalizedTerm);
+                    if (aNameMatch && !bNameMatch) return -1;
+                    if (!aNameMatch && bNameMatch) return 1;
+                    return (a.name || a.path).localeCompare(b.name || b.path, 'zh-CN');
+                });
+            }
+
+            function renderSearchResults(results, searchTerm) {
+                if (!results.length) {
+                    searchResults.innerHTML = '<div class="no-results">未找到匹配的教程</div>';
+                    return;
+                }
+
+                const html = results.map((file, index) => {
+                    const fileName = (file.name || file.path).replace(/\.json$/, '');
+                    const filePath = file.path;
+                    const highlightedName = highlightText(fileName, searchTerm);
+                    const highlightedPath = highlightText(filePath, searchTerm);
+
+                    return `
+                        <div class="search-result-item ${index === selectedIndex ? 'selected' : ''}"
+                             data-index="${index}" data-path="${filePath}">
+                            <div class="result-name">${highlightedName}</div>
+                            <div class="result-path">${highlightedPath}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                searchResults.innerHTML = html;
+
+                // 绑定点击事件
+                searchResults.querySelectorAll('.search-result-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const filePath = item.dataset.path;
+                        loadFileContent(filePath);
+                        clearSearch();
+                    });
+                });
+            }
+
+            function updateSearchStats(results, searchTerm) {
+                if (!searchTerm.trim()) {
+                    searchStats.textContent = '';
+                    return;
+                }
+                searchStats.textContent = `找到 ${results.length} 个结果`;
+            }
+
+            function performSearch() {
+                const searchTerm = searchInput.value.trim();
+                currentSearchTerm = searchTerm;
+
+                if (!searchTerm) {
+                    isSearchMode = false;
+                    searchResults.style.display = 'none';
+                    fileTreeContainer.style.display = 'block';
+                    updateSearchStats([], '');
+                    return;
+                }
+
+                isSearchMode = true;
+                filteredFiles = searchFiles(searchTerm);
+                selectedIndex = filteredFiles.length > 0 ? 0 : -1;
+
+                searchResults.style.display = 'block';
+                fileTreeContainer.style.display = 'none';
+
+                renderSearchResults(filteredFiles, searchTerm);
+                updateSearchStats(filteredFiles, searchTerm);
+            }
+
+            function clearSearch() {
+                searchInput.value = '';
+                currentSearchTerm = '';
+                selectedIndex = -1;
+                isSearchMode = false;
+                searchResults.style.display = 'none';
+                fileTreeContainer.style.display = 'block';
+                updateSearchStats([], '');
+                searchInput.blur();
             }
 
             // 1. 获取文件列表并构建文件树（带缓存）
             function getFiles() {
+                showLoading();
+
                 const cachedFiles = localStorage.getItem('fileList');
                 if (cachedFiles) {
                     try {
                         console.log('从缓存加载文件列表。');
                         const files = JSON.parse(cachedFiles);
+                        allFiles = files;
                         const fileTree = buildTree(files);
                         renderTree(fileTree, fileTreeContainer);
+                        hideLoading();
                         return;
                     } catch (e) {
                         console.error('解析缓存失败，重新获取', e);
@@ -59,6 +397,7 @@
                     .then(files => {
                         if (Array.isArray(files)) {
                             localStorage.setItem('fileList', JSON.stringify(files));
+                            allFiles = files;
                             const fileTree = buildTree(files);
                             renderTree(fileTree, fileTreeContainer);
                             console.log(`成功加载 ${files.length} 个文件`);
@@ -69,16 +408,16 @@
                     .catch(error => {
                         console.error('获取文件列表失败:', error);
                         fileTreeContainer.innerHTML = `
-                            <div style="padding: 20px; text-align: center; color: #666;">
+                            <div class="error-message">
                                 <p>⚠️ 无法加载课程目录</p>
-                                <p style="font-size: 12px; margin-top: 10px;">
-                                    错误信息: ${error.message}
-                                </p>
-                                <p style="font-size: 12px; color: #999;">
-                                    环境: ${isGitHubPages ? 'GitHub Pages' : '本地开发'}
-                                </p>
+                                <p class="error-details">错误信息: ${error.message}</p>
+                                <p class="error-env">环境: ${isGitHubPages ? 'GitHub Pages' : '本地开发'}</p>
+                                <button onclick="location.reload()" class="retry-btn">重试</button>
                             </div>
                         `;
+                    })
+                    .finally(() => {
+                        hideLoading();
                     });
             }
 
@@ -139,6 +478,7 @@
                             document.querySelectorAll('#file-tree .file.active').forEach(el => el.classList.remove('active'));
                             a.classList.add('active');
                             loadFileContent(itemPath);
+                            addToRecentFiles(itemPath);
                         });
                         li.appendChild(a);
                     } else {
@@ -148,7 +488,12 @@
                         li.appendChild(folderContent);
                         li.classList.add('folder');
 
-                        if (expandedFolders.has(itemPath)) {
+                        // 为文件夹元素添加路径数据，便于面包屑导航定位
+                        li.dataset.folderPath = itemPath;
+
+                        // 只有在 expandedFolders 中明确包含此路径时才展开
+                        // 默认状态由 CSS 确保为折叠状态
+                        if (expandedFolders && expandedFolders.has && expandedFolders.has(itemPath)) {
                             li.classList.add('expanded');
                         }
 
@@ -173,22 +518,203 @@
 
             // 2. 加载并显示文件内容
             function loadFileContent(path) {
-                fetch(`/api/content?path=${encodeURIComponent(path)}`)
+                showLoading();
+                updateBreadcrumb(path);
+
+                // 检测运行环境
+                const isGitHubPages = window.location.hostname.includes('github.io');
+                const apiUrl = isGitHubPages ?
+                    `/api/content?path=${encodeURIComponent(path)}` :
+                    `/api/content?path=${encodeURIComponent(path)}`;
+
+                fetch(apiUrl)
                     .then(response => response.json())
                     .then(data => {
                         if (data.content) {
-                            contentContainer.innerHTML = data.content;
+                            contentContainer.innerHTML = `
+                                <div class="content-wrapper">
+                                    <div class="file-content">${data.content}</div>
+                                </div>
+                            `;
                         } else {
-                            contentContainer.innerHTML = '<h1>无法加载内容</h1>';
+                            contentContainer.innerHTML = `
+                                <div class="error-message">
+                                    <h2>📄 无法加载内容</h2>
+                                    <p>文件可能不存在或格式不正确</p>
+                                </div>
+                            `;
                         }
                     })
                     .catch(error => {
                         console.error('获取文件内容失败:', error);
-                        contentContainer.innerHTML = '<h1>加载内容时出错</h1>';
+                        contentContainer.innerHTML = `
+                            <div class="error-message">
+                                <h2>❌ 加载内容时出错</h2>
+                                <p class="error-details">${error.message}</p>
+                                <button onclick="loadFileContent('${path}')" class="retry-btn">重试</button>
+                            </div>
+                        `;
+                    })
+                    .finally(() => {
+                        hideLoading();
                     });
             }
+
+            // 事件监听器设置
+            function setupEventListeners() {
+                // 搜索输入事件
+                searchInput.addEventListener('input', debounce(performSearch, 300));
+                searchInput.addEventListener('keydown', handleSearchKeydown);
+
+                // 清除搜索按钮
+                searchClear.addEventListener('click', clearSearch);
+
+                // 全局快捷键
+                document.addEventListener('keydown', handleGlobalKeydown);
+
+                // 主题切换
+                document.getElementById('toggle-theme').addEventListener('click', toggleTheme);
+
+                // 字体大小调节
+                document.getElementById('font-size-decrease').addEventListener('click', () => adjustFontSize(-1));
+                document.getElementById('font-size-increase').addEventListener('click', () => adjustFontSize(1));
+            }
+
+            // 防抖函数
+            function debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            // 搜索键盘事件处理
+            function handleSearchKeydown(e) {
+                if (!isSearchMode) return;
+
+                switch (e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        selectedIndex = Math.min(selectedIndex + 1, filteredFiles.length - 1);
+                        updateSearchSelection();
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        selectedIndex = Math.max(selectedIndex - 1, 0);
+                        updateSearchSelection();
+                        break;
+                    case 'Enter':
+                        e.preventDefault();
+                        if (selectedIndex >= 0 && filteredFiles[selectedIndex]) {
+                            loadFileContent(filteredFiles[selectedIndex].path);
+                            clearSearch();
+                        }
+                        break;
+                    case 'Escape':
+                        e.preventDefault();
+                        clearSearch();
+                        break;
+                }
+            }
+
+            // 全局键盘事件处理
+            function handleGlobalKeydown(e) {
+                if (e.ctrlKey && e.key === 'f') {
+                    e.preventDefault();
+                    searchInput.focus();
+                    searchInput.select();
+                }
+
+                if (e.key === 'Escape' && isSearchMode) {
+                    clearSearch();
+                }
+            }
+
+            // 更新搜索选择状态
+            function updateSearchSelection() {
+                const items = searchResults.querySelectorAll('.search-result-item');
+                items.forEach((item, index) => {
+                    item.classList.toggle('selected', index === selectedIndex);
+                });
+
+                // 滚动到选中项
+                if (items[selectedIndex]) {
+                    items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                }
+            }
+
+            // 主题切换
+            function toggleTheme() {
+                const isDark = document.body.classList.toggle('dark-theme');
+
+                // 同时更新 documentElement，确保预加载脚本和运行时脚本一致
+                if (isDark) {
+                    document.documentElement.classList.add('dark-theme');
+                } else {
+                    document.documentElement.classList.remove('dark-theme');
+                }
+
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+                const themeBtn = document.getElementById('toggle-theme');
+                themeBtn.textContent = isDark ? '☀️' : '🌙';
+            }
+
+            // 字体大小调节
+            function adjustFontSize(delta) {
+                const currentSize = parseInt(localStorage.getItem('fontSize')) || 16;
+                const newSize = Math.max(12, Math.min(24, currentSize + delta));
+                document.documentElement.style.fontSize = newSize + 'px';
+                localStorage.setItem('fontSize', newSize);
+            }
+
+            // 初始化主题和字体大小
+            function initializeSettings() {
+                // 主题和字体大小已在 head 中预加载，这里只需要更新按钮状态
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme === 'dark') {
+                    // 确保主题类应用到 body 而不是 documentElement
+                    document.body.classList.add('dark-theme');
+                    document.getElementById('toggle-theme').textContent = '☀️';
+                } else {
+                    // 如果不是深色主题，确保移除可能存在的类
+                    document.documentElement.classList.remove('dark-theme');
+                }
+
+                // 字体大小已在 head 中设置，这里不需要重复设置
+            }
+
+            // 添加重置文件树状态的功能（用于调试或重置）
+            function resetFileTreeState() {
+                expandedFolders.clear();
+                saveExpandedState();
+
+                // 立即更新当前页面的显示状态
+                document.querySelectorAll('#file-tree .folder.expanded').forEach(folder => {
+                    folder.classList.remove('expanded');
+                });
+
+                console.log('文件树状态已重置，所有文件夹已折叠');
+            }
+
+            // 在控制台暴露重置功能，方便调试
+            window.resetFileTreeState = resetFileTreeState;
+
+            // 初始化应用
+            initializeSettings();
+            setupEventListeners();
+            getFiles();
+
+            // 页面完全加载后移除加载状态
+            setTimeout(() => {
+                document.documentElement.classList.remove('page-loading');
+            }, 100);
         });
     </script>
 </body>
 </html>
-]]>

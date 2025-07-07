@@ -1,6 +1,6 @@
 {
   "name": "pvf-course-reader",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "A server to read data from the pvfCourse directory.",
   "main": "server.js",
   "scripts": {
