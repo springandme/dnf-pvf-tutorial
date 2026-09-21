@@ -59,8 +59,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # GHCR 包默认私有，改为 public 让部署服务器免登录拉取
-      - name: 设置镜像为公开
+      # GHCR 包默认私有，改为 public 让部署服务器免登录拉取。
+      # 修改可见性需要 admin:packages 权限，GITHUB_TOKEN 通常 404，
+      # 失败不阻塞构建，首次需手动到 package settings 设置一次
+      - name: 尝试设置镜像为公开
+        continue-on-error: true
         run: |
           code=$(curl -s -o /tmp/vis.json -w '%{http_code}' -X PATCH \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -68,4 +71,6 @@ jobs:
             https://api.github.com/user/packages/container/dnf-pvf-tutorial \
             -d '{"visibility":"public"}')
           echo "HTTP $code"; cat /tmp/vis.json
-          test "$code" = "200"
+          if [ "$code" != "200" ]; then
+            echo "::warning::无法自动设置 public，请手动访问 https://github.com/users/springandme/packages/container/dnf-pvf-tutorial/settings 将可见性设为 Public"
+          fi
