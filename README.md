@@ -181,6 +181,34 @@ node scripts/mirror-daf-media.js --force    # 强制重新下载
 
 脚本支持断点续传，失败的记录在 `media-cache/mirror-failures.log`，重跑即可补齐。
 
+#### 境外服务器的源站代理（反向隧道）
+
+DAF 源站屏蔽境外 IP（TCP 可连但 TLS 握手被丢弃），海外服务器直连回源会失败。
+若有一台国内网络的机器（如本地 WSL），可建立 SSH 反向隧道借道访问：
+
+1. 本地安装 tinyproxy 并监听 `127.0.0.1:17771`（`sudo apt install tinyproxy`，
+   配置 `Port 17771` / `Listen 127.0.0.1`）；
+2. 服务器 `/etc/ssh/sshd_config` 设置 `GatewayPorts clientspecified` 并 reload；
+3. 本地运行保活脚本（断线自动重连）：
+
+```bash
+nohup scripts/daf-tunnel.sh &
+```
+
+4. 服务器 compose 中配置（模板已内置）：
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+environment:
+  - MEDIA_UPSTREAM_PROXY=http://host.docker.internal:17771
+```
+
+生效后容器日志会输出 `upstream proxy enabled`，`/media/` 兜底回源与
+`mirror-daf-media.js`（设同名环境变量）都会经国内出口访问源站。
+隧道断开时服务自动降级为纯本地缓存模式，已有图片不受影响；
+服务器侧隧道端口只绑定 docker0 网卡（172.17.0.1），外部无法访问。
+
 **目录结构要求**：
 ```
 部署目录/
