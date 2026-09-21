@@ -1,0 +1,8 @@
+node_modules
+media-cache
+logs
+.git
+.github
+dist
+*.log
+docs

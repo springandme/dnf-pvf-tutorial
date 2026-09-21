@@ -53,9 +53,6 @@ temp/
 logs
 *.log
 
-# Docker 相关
-.dockerignore
-
 # TypeScript 缓存
 *.tsbuildinfo
 
