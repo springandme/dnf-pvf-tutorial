@@ -172,9 +172,12 @@ app.get('/api/image-proxy', async (req, res) => {
     }
 
     const buf = Buffer.from(await upstream.arrayBuffer());
-    fs.mkdirSync(PROXY_CACHE_DIR, { recursive: true });
-    fs.writeFileSync(cacheFile, buf);
-    fs.writeFileSync(metaFile, JSON.stringify({ contentType, url: target.href }));
+    // 落盘失败不影响返回（例如挂载目录对运行用户只读）
+    try {
+      fs.mkdirSync(PROXY_CACHE_DIR, { recursive: true });
+      fs.writeFileSync(cacheFile, buf);
+      fs.writeFileSync(metaFile, JSON.stringify({ contentType, url: target.href }));
+    } catch (e) { /* ignore cache write errors */ }
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=604800');
     return res.send(buf);
