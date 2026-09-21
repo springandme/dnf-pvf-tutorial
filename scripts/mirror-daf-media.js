@@ -24,6 +24,20 @@ const args = process.argv.slice(2);
 const concurrency = parseInt((args.find(a => a.startsWith('--concurrency=')) || '').split('=')[1], 10) || 8;
 const force = args.includes('--force');
 
+// 可选出站代理（服务器屏蔽境外时经国内网络隧道中转），用法：
+//   MEDIA_UPSTREAM_PROXY=http://host.docker.internal:17771 node scripts/mirror-daf-media.js
+const MEDIA_UPSTREAM_PROXY = process.env.MEDIA_UPSTREAM_PROXY;
+let proxyDispatcher = null;
+if (MEDIA_UPSTREAM_PROXY) {
+  try {
+    const { ProxyAgent } = require('undici');
+    proxyDispatcher = new ProxyAgent(MEDIA_UPSTREAM_PROXY);
+    console.log(`使用出站代理: ${MEDIA_UPSTREAM_PROXY}`);
+  } catch (e) {
+    console.warn(`无法加载 undici，忽略 MEDIA_UPSTREAM_PROXY: ${e.message}`);
+  }
+}
+
 function collectMediaUrls() {
   const urls = new Set();
   const pattern = /src=\\?"(\/media\/uploads\/[^\\"]+?)\\?"/g;
@@ -56,6 +70,7 @@ async function fetchImage(url, retries = 2) {
         },
         signal: controller.signal,
         redirect: 'follow',
+        dispatcher: proxyDispatcher || undefined,
       });
       if (!res.ok) {
         throw new Error(`upstream ${res.status}`);

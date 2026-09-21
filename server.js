@@ -13,6 +13,20 @@ const PROXY_CACHE_DIR = path.join(MEDIA_CACHE_DIR, 'proxy');
 // 首次访问时从这里拉取并落盘到 media-cache/media/，之后全部走本地缓存。
 const DAF_ORIGIN = 'https://daf.linglonger.com';
 
+// 可选出站代理：源站屏蔽境外 IP 时，经国内网络反向隧道中转
+// （ssh -R <bind>:17771:127.0.0.1:17771 + 宿主 tinyproxy），配置 MEDIA_UPSTREAM_PROXY 启用
+const MEDIA_UPSTREAM_PROXY = process.env.MEDIA_UPSTREAM_PROXY;
+let proxyDispatcher = null;
+if (MEDIA_UPSTREAM_PROXY) {
+  try {
+    const { ProxyAgent } = require('undici');
+    proxyDispatcher = new ProxyAgent(MEDIA_UPSTREAM_PROXY);
+    console.log(`upstream proxy enabled: ${MEDIA_UPSTREAM_PROXY}`);
+  } catch (e) {
+    console.warn(`MEDIA_UPSTREAM_PROXY set (${MEDIA_UPSTREAM_PROXY}) but undici unavailable: ${e.message}`);
+  }
+}
+
 // Serve static files from the root directory
 app.use(express.static(path.join(__dirname)));
 
@@ -61,6 +75,7 @@ app.use('/media', (req, res) => {
         },
         signal: controller.signal,
         redirect: 'follow',
+        dispatcher: proxyDispatcher || undefined,
       });
       if (!upstream.ok) {
         throw Object.assign(new Error(`upstream ${upstream.status}`), { statusCode: upstream.status });
@@ -160,7 +175,7 @@ app.get('/api/image-proxy', async (req, res) => {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
-    const upstream = await fetch(target.href, { headers, signal: controller.signal, redirect: 'follow' });
+    const upstream = await fetch(target.href, { headers, signal: controller.signal, redirect: 'follow', dispatcher: proxyDispatcher || undefined });
     clearTimeout(timer);
 
     if (!upstream.ok) {
