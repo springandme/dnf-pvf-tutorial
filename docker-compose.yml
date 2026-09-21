@@ -21,12 +21,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      # 可选：DAF 源站屏蔽境外时的出站代理（经国内网络反向隧道中转）
-      - MEDIA_UPSTREAM_PROXY=${MEDIA_UPSTREAM_PROXY:-}
-
-    # 让容器能访问宿主机上的反向隧道代理端口（host-gateway = 宿主 docker0 IP）
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
     # 数据卷挂载
     volumes:
