@@ -516,6 +516,43 @@
                 container.appendChild(ul);
             }
 
+            // 教程内容中的图片地址重写：
+            // - 相对路径 /media/... 走本地 media-cache 目录（服务端提供）
+            // - 外部 http(s) 图片改走 /api/image-proxy，避免混合内容拦截并带上 Referer 绕过防盗链
+            function rewriteImageUrls(html) {
+                const tpl = document.createElement('template');
+                tpl.innerHTML = html;
+                tpl.content.querySelectorAll('img').forEach(img => {
+                    const src = img.getAttribute('src');
+                    if (!src) return;
+                    if (src.startsWith('data:')) return;
+                    if (/^https?:\/\//i.test(src)) {
+                        img.setAttribute('data-original-src', src);
+                        img.setAttribute('src', `/api/image-proxy?url=${encodeURIComponent(src)}`);
+                    } else if (src.startsWith('/media/')) {
+                        img.setAttribute('data-original-src', src);
+                        // 保持相对路径，命中本地缓存则直接展示
+                    }
+                });
+                return tpl.innerHTML;
+            }
+
+            // 加载失败的图片显示统一占位样式，而不是裂图
+            function activateImageFallbacks(container) {
+                container.querySelectorAll('img').forEach(img => {
+                    if (img.dataset.fallbackBound) return;
+                    img.dataset.fallbackBound = '1';
+                    img.addEventListener('error', () => {
+                        if (img.dataset.placeholderShown) return;
+                        img.dataset.placeholderShown = '1';
+                        const d = document.createElement('div');
+                        d.className = 'image-placeholder';
+                        d.textContent = '🖼️ 图片加载失败';
+                        img.replaceWith(d);
+                    });
+                });
+            }
+
             // 2. 加载并显示文件内容
             function loadFileContent(path) {
                 showLoading();
@@ -533,9 +570,10 @@
                         if (data.content) {
                             contentContainer.innerHTML = `
                                 <div class="content-wrapper">
-                                    <div class="file-content">${data.content}</div>
+                                    <div class="file-content">${rewriteImageUrls(data.content)}</div>
                                 </div>
                             `;
+                            activateImageFallbacks(contentContainer);
                         } else {
                             contentContainer.innerHTML = `
                                 <div class="error-message">

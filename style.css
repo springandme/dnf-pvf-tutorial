@@ -949,3 +949,18 @@ a:focus-visible {
         padding: 0;
     }
 }
+/* 失效图片占位样式 */
+.image-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 12px auto;
+    padding: 24px 16px;
+    max-width: 560px;
+    border: 1px dashed var(--border-color, #ccc);
+    border-radius: 8px;
+    background: rgba(128, 128, 128, 0.06);
+    color: var(--text-color-secondary, #888);
+    font-size: 14px;
+    text-align: center;
+}

@@ -156,9 +156,30 @@ docker run -d \
 volumes:
   # 只读挂载课程数据目录
   - ./pvfCourse:/app/pvfCourse:ro
+  # 挂载教程图片缓存目录（约 300MB，建议持久化）
+  - ./media-cache:/app/media-cache
   # 可选：挂载日志目录
   - ./logs:/app/logs
 ```
+
+#### 教程图片说明
+
+教程内容中的图片原始路径为 `/media/uploads/...`，源站为 DAF 论坛
+（`https://daf.linglonger.com`）。服务端处理逻辑：
+
+1. 请求 `/media/uploads/...` 时优先读本地缓存 `media-cache/media/`；
+2. 本地没有时自动从源站拉取、落盘后返回（首次访问稍慢）；
+3. 内容中的外部图床链接统一走 `/api/image-proxy`（服务端代理 + 磁盘缓存，
+   规避混合内容拦截和防盗链）。
+
+**推荐部署后执行一次预热镜像**，之后所有图片全部走本地：
+
+```bash
+node scripts/mirror-daf-media.js            # 扫描全部教程并下载引用的图片
+node scripts/mirror-daf-media.js --force    # 强制重新下载
+```
+
+脚本支持断点续传，失败的记录在 `media-cache/mirror-failures.log`，重跑即可补齐。
 
 **目录结构要求**：
 ```

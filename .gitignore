@@ -58,3 +58,6 @@ logs
 
 # TypeScript 缓存
 *.tsbuildinfo
+
+# 教程图片本地缓存（由 scripts/mirror-daf-media.js 或运行时兜底路由生成，体积大不入库）
+media-cache/

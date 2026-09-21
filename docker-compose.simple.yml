@@ -17,6 +17,8 @@ services:
     # 挂载课程数据目录
     volumes:
       - ./pvfCourse:/app/pvfCourse:ro
+      # 教程图片缓存目录（可在宿主机先跑 scripts/mirror-daf-media.js 预热）
+      - ./media-cache:/app/media-cache
     
     # 重启策略
     restart: unless-stopped

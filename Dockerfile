@@ -33,7 +33,10 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app ./
 
 # 创建一个低权限的用户来运行应用，增强安全性
-RUN addgroup -S nodeuser && adduser -S nodeuser -G nodeuser
+RUN addgroup -S nodeuser && adduser -S nodeuser -G nodeuser \
+    # 预建教程图片缓存目录并授权，运行时兜底拉取的图片才能落盘
+    && mkdir -p /app/media-cache/media \
+    && chown -R nodeuser:nodeuser /app/media-cache
 USER nodeuser
 
 # 设置环境变量为生产环境
